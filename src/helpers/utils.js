@@ -110,7 +110,7 @@ exports.notificationMail = async (userData) => {
 
   const mailObj = {
     email: userData.email,
-    subject: "2040-chat notification",
+    subject: "chat-buzz notification",
     root: "../email-templates/notification.ejs",
     templateData: { name: name, msg: msg, url: redirectUrl },
   };
@@ -126,7 +126,7 @@ exports.notificationMailOnInvite = async (userData) => {
 
   const mailObj = {
     email: userData.email,
-    subject: "2040.chat notification",
+    subject: "chat.buzz notification",
     root: "../email-templates/notification.ejs",
     templateData: { name: name, msg: msg, url: redirectUrl },
   };
@@ -145,7 +145,7 @@ exports.approveUser = async (userData) => {
 
   const mailObj = {
     email: userData.email,
-    subject: "2040.chat notification",
+    subject: "chat.buzz notification",
     root: "../email-templates/approve-user.ejs",
     templateData: { name: name, msg: msg, url: redirectUrl },
   };
@@ -168,7 +168,7 @@ exports.executeQuery = async (query, values = []) => {
 exports.registeredUser = async (adminMail, userName) => {
   let redirectUrl = `${environment.FRONTEND_URL}profile-chats`;
 
-  let msg = `${userName} has registered for messaging on 2040-chat.`;
+  let msg = `${userName} has registered for messaging on chat-buzz.`;
   const mailObj = {
     email: adminMail,
     subject: "New User has been registered",
