@@ -119,7 +119,7 @@ User.create = function (userData, result) {
 };
 
 User.findAndSearchAll = async (limit, offset, search, startDate, endDate) => {
-  let whereCondition = `${search ? `u.Username LIKE '%${search}%'` : ""}`;
+  let whereCondition = `${search ? `u.Username LIKE '%${search}%' OR u.Email LIKE '%${search}%'` : ""}`;
   if (startDate && endDate) {
     whereCondition += `${search ? `AND` : ``
       } u.DateCreation >= '${startDate}' AND u.DateCreation <= '${endDate}'`;
