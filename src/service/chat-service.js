@@ -102,6 +102,14 @@ exports.getMessages = async function (data) {
   return await getMessages(data);
 };
 
+exports.endCall = async function (data) {
+  return await endCall(data);
+};
+
+exports.checkCall = async function (data) {
+  return await checkCall(data);
+};
+
 const getChatList = async function (params) {
   try {
     const query = `SELECT
@@ -613,6 +621,21 @@ const deleteRoom = async function (params) {
 const startCall = async function (params) {
   try {
     if (params) {
+      const query = `select * from calls_logs where profileId = ${params.notificationToProfileId} and isOnCall = 'Y' and endDate is null`;
+      const [callLogs] = await executeQuery(query);
+      const callLogsData = {
+        profileId: params?.notificationByProfileId,
+        isOnCall: "Y",
+        roomId: params?.roomId || null,
+        groupId: params?.groupId || null,
+        callLink: params?.link || null,
+      };
+      if (callLogsData) {
+        const query = `insert into calls_logs set ?`;
+        const values = [callLogsData];
+        await executeQuery(query, values);
+      }
+      console.log("callLogs", callLogs);
       if (params?.roomId) {
         const data = {
           notificationToProfileId: params?.notificationToProfileId || null,
@@ -627,6 +650,11 @@ const startCall = async function (params) {
         const [profile] = await executeQuery(query);
         notification["Username"] = profile?.Username;
         notification["ProfilePicName"] = profile?.ProfilePicName;
+        if (callLogs?.isOnCall === "Y") {
+          notification["isOnCall"] = callLogs?.isOnCall;
+        } else {
+          notification["isOnCall"] = "N";
+        }
         return { notification };
       } else {
         const data = {
@@ -641,7 +669,14 @@ const startCall = async function (params) {
         const query = `select p.Username,p.FirstName,p.LastName,p.ProfilePicName from profile as p where p.ID = ${params?.notificationByProfileId}`;
         const [profile] = await executeQuery(query);
         notification["Username"] = profile?.Username;
-        notification["ProfilePicName"] = profile?.ProfilePicName;
+        const group = await getGroup({ groupId: data.groupId });
+        notification["ProfilePicName"] = group?.profileImage;
+        notification["groupName"] = group?.groupName;
+        if (callLogs?.isOnCall === "Y") {
+          notification["isOnCall"] = callLogs?.isOnCall;
+        } else {
+          notification["isOnCall"] = "N";
+        }
         return { notification };
       }
     }
@@ -653,6 +688,8 @@ const startCall = async function (params) {
 const declineCall = async function (params) {
   try {
     if (params) {
+      const query = `update calls_logs set endDate = now(), isOnCall = 'N' where roomId = ${params.roomId} and isOnCall = 'Y'`;
+      await executeQuery(query);
       const data = {
         notificationToProfileId: params?.notificationToProfileId || null,
         roomId: params?.roomId,
@@ -671,6 +708,18 @@ const declineCall = async function (params) {
 const pickUpCall = async function (params) {
   try {
     if (params) {
+      const callLogs = {
+        profileId: params?.notificationByProfileId,
+        isOnCall: "Y",
+        roomId: params?.roomId || null,
+        groupId: params?.groupId || null,
+        callLink: params?.link || null,
+      };
+      if (callLogs) {
+        const query = `insert into calls_logs set ?`;
+        const values = [callLogs];
+        await executeQuery(query, values);
+      }
       const data = {
         notificationToProfileId: params?.notificationToProfileId || null,
         roomId: params?.roomId,
@@ -914,6 +963,7 @@ const resendRoom = async function (params) {
     return error;
   }
 };
+
 const userStatus = async function (id) {
   try {
     const query = `select userStatus from profile where ID = ${id}`;
@@ -987,5 +1037,25 @@ const getReadUser = async function (msg) {
     return readUsers;
   } catch (error) {
     return null;
+  }
+};
+
+const endCall = async function (data) {
+  try {
+    const query = `update calls_logs set isOnCall = 'N', endDate = NOW() where profileId = ${data?.profileId} and (groupId = ${data?.groupId} or roomId = ${data?.roomId}) and endDate is null`;
+    const callData = await executeQuery(query);
+    return callData;
+  } catch (error) {
+    return error;
+  }
+};
+
+const checkCall = async function (data) {
+  try {
+    const query = `select * from calls_logs where profileId = ${data?.profileId} and isOnCall = 'Y' and endDate is null`;
+    const [callData] = await executeQuery(query);
+    return callData;
+  } catch (error) {
+    return error;
   }
 };
