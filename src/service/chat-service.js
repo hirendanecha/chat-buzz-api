@@ -1,7 +1,10 @@
 const { executeQuery } = require("../helpers/utils");
-const { notificationMailOnInvite } = require("../helpers/utils");
 const { getPagination, getCount, getPaginationData } = require("../helpers/fn");
 const moment = require("moment");
+const {
+  notificationMailOnInvite,
+  notificationMail,
+} = require("../helpers/utils");
 
 exports.getChatList = async function (params) {
   return await getChatList(params);
@@ -102,6 +105,10 @@ exports.getMessages = async function (data) {
   return await getMessages(data);
 };
 
+exports.getRoomByProfileId = async function (data) {
+  return await getRoomByProfileId(data);
+};
+
 exports.endCall = async function (data) {
   return await endCall(data);
 };
@@ -112,6 +119,10 @@ exports.checkCall = async function (data) {
 
 exports.suspendUser = function (data) {
   return suspendUser(data);
+};
+
+exports.sendNotificationEmail = async function (data) {
+  return await sendNotificationEmail(data);
 };
 
 const getChatList = async function (params) {
@@ -280,6 +291,40 @@ const sendMessage = async function (params) {
             actionType: "M",
             msg: "sent you a message in group",
           });
+          if (params?.tags?.length > 0) {
+            const notifications = [];
+            for (const key in params?.tags) {
+              if (Object.hasOwnProperty.call(params?.tags, key)) {
+                const tag = params?.tags[key];
+
+                // const notification = await createNotification({
+                //   notificationToProfileId: tag?.id,
+                //   groupId: data?.groupId,
+                //   notificationByProfileId: data?.sentBy,
+                //   actionType: "T",
+                //   msg: "tagged you in message",
+                // });
+                const findUser = `select u.Email,p.FirstName,p.LastName,p.Username from users as u left join profile as p on p.UserID = u.Id where p.messageNotificationEmail = 'Y' and p.ID = ?`;
+                const values = [tag?.id];
+                const userData = await executeQuery(findUser, values);
+                if (userData?.length) {
+                  const senderData = await getGroup({ groupId: data?.groupId });
+                  // notifications.push(notification);
+                  if (tag?.id) {
+                    const userDetails = {
+                      email: userData[0].Email,
+                      userName: userData[0].Username,
+                      senderUsername: senderData.groupName,
+                      ProfilePicName: senderData.profileImage,
+                      type: "message",
+                      groupId: senderData?.id,
+                    };
+                    await notificationMail(userDetails);
+                  }
+                }
+              }
+            }
+          }
           return { newMessage, notification };
         }
       }
@@ -775,34 +820,39 @@ const createGroups = async function (params) {
 
       let notifications = [];
       let groupList = {};
-      if (params.profileIds.length > 0) {
-        for (const id of params.profileIds) {
-          const data = {
-            groupId: params?.groupId,
-            profileId: id,
-          };
-          if (params.isUpdate) {
+      if (params.isUpdate) {
+        if (params.profileIds.length >= 0) {
+          for (const id of params.profileIds) {
+            const data = {
+              groupId: params?.groupId,
+              profileId: id,
+            };
             const memberId = await addMembers(data);
+            console.log("ids==>", id);
+            const notification = await createNotification({
+              notificationByProfileId: params?.profileId,
+              notificationToProfileId: id,
+              actionType: "M",
+              groupId: params?.groupId,
+              msg: `${"added you in chat group"}`,
+            });
+            notifications.push(notification);
           }
           // if (memberId) {
-          console.log("ids==>", id);
-          const notification = await createNotification({
-            notificationByProfileId: params?.profileId,
-            notificationToProfileId: id,
-            actionType: "M",
-            groupId: params?.groupId,
-            msg: `${
-              params?.isUpdate
-                ? "added you in chat group"
-                : "changed group details"
-            }`,
-          });
-          notifications.push(notification);
+
+          // }
+        } else {
+          groupList = await getGroup(params);
+          return { groupList };
         }
       } else {
-        groupList = await getGroup(params);
-        console.log("getttt===>");
-        return { groupList };
+        const notification = await createNotification({
+          notificationByProfileId: params?.profileId,
+          actionType: "M",
+          groupId: params?.groupId,
+          msg: `${"changed group details"}`,
+        });
+        notifications.push(notification);
       }
       groupList = await getGroup(params);
       return { notifications, groupList, groupId: params?.groupId };
@@ -1070,6 +1120,55 @@ const suspendUser = async function (params) {
     const values = [params.isSuspended, params.id];
     const user = await executeQuery(query, values);
     return user;
+  } catch (error) {
+    return error;
+  }
+};
+
+const getRoomByProfileId = async function (data) {
+  try {
+    const query = `select 
+                  r.id AS roomId,
+                  r.profileId1 AS createdBy,
+                  r.isAccepted,
+                  r.lastMessageText,
+                  r.updatedDate,
+                  r.createdDate,
+                  r.isDeleted,
+                  p.ID AS profileId,
+                  p.Username,
+                  p.FirstName,
+                  p.LastName,
+                  p.ProfilePicName
+    from chatRooms as r left join
+    profile as p on p.ID = ${data.profileId2} where r.isDeleted = 'N' and (r.profileId1 = ${data.profileId1} and r.profileId2 = ${data.profileId2} OR r.profileId1 = ${data.profileId2} and r.profileId2 = ${data.profileId1})`;
+    const rooms = await executeQuery(query);
+    return rooms;
+  } catch (error) {
+    return error;
+  }
+};
+
+
+const sendNotificationEmail = async function (data) {
+  try {
+    const findUser = `select u.Email,p.FirstName,p.LastName,p.Username from users as u left join profile as p on p.UserID = u.Id where p.messageNotificationEmail = 'Y' and p.ID = ?`;
+    const values = [data?.profileId];
+    const userData = await executeQuery(findUser, values);
+    if (userData?.length) {
+      const senderData = await getRoom(data?.roomId);
+      console.log(senderData);
+      const userDetails = {
+        email: userData[0].Email,
+        userName: userData[0].Username,
+        senderUsername: senderData.Username,
+        type: "message",
+        roomId: senderData?.roomId,
+      };
+      await notificationMail(userDetails);
+    } else {
+      return true;
+    }
   } catch (error) {
     return error;
   }
